@@ -15,8 +15,8 @@ const envSchema = z.object({
   GOOGLE_SPREADSHEET_ID: z.string().min(1),
   GOOGLE_SHEET_NAME: z.string().min(1).default("list2"),
   GOOGLE_SHEET_GID: z.string().min(1).optional(),
-  CRON_SCHEDULE: z.string().default("0 9,21 * * *"),
-  CRON_TZ: z.string().default("Asia/Tashkent"),
+  CRON_SCHEDULE: z.string().default("0 12,18 * * *"),
+  CRON_TZ: z.string().default("Europe/Moscow"),
 
   ALERT_TELEGRAM_BOT_TOKEN: z.string().optional(),
   ALERT_TELEGRAM_CHAT_ID: z.string().optional(),
