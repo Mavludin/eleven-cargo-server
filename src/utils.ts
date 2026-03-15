@@ -1,6 +1,11 @@
 import { isValid, parse } from "date-fns";
 
-import { REQUIRED_ORDER_ITEM_KEYS, type ImportOrderItem, type OrderItem } from "./types";
+import {
+  REQUIRED_ORDER_ITEM_KEYS,
+
+  type ImportOrderItem,
+  type OrderItem,
+} from "./types";
 
 const DATE_FORMATS = ["dd-MM-yyyy", "dd/MM/yyyy", "dd.MM.yyyy", "dd,MM,yyyy"] as const;
 const NUMERIC_COLUMNS = new Set([
@@ -9,7 +14,7 @@ const NUMERIC_COLUMNS = new Set([
   "Плотность",
   "Сумма/",
   "Страховка",
-  "Сумма ↵страховки",
+  "Сумма \nстраховки",
   "Цена",
   "перегруз",
   "Наш тариф",
@@ -68,16 +73,16 @@ export const generateOrderItem = (order: ImportOrderItem): Partial<OrderItem> =>
   return {
     code: order["Номер накладной"].trim(),
     paymentDate: parseDate(order["оплачено дата"]),
-    arrivalDate: parseDate(order["Дата прибытия мск"]),
+    arrivalDate: parseDate(order["Дата прибытия мск\""]),
     deliveryPeriod: order["Тип дороги"],
     invoice: {
       title: order.Наименование,
       weight: parseNumericField(order.Вес),
       volume: parseNumericField(order.Куб),
       price: parseNumericField(order.Цена),
-      goods: parseNumericField(order["Сумма/"]),
-      percent: parseNumericField(order.Страховка),
-      insurance: parseNumericField(order["Сумма ↵страховки"]),
+      goods: parseNumericField(order.Страховка),
+      percent: 1,
+      insurance: parseNumericField(order["Сумма \nстраховки"]),
       package: parseNumericField(order["Наша упаковка"]),
       packageType: order["Вид упаковки"]?.trim(),
       offload: parseNumericField(order.перегруз),
@@ -95,7 +100,7 @@ export const generateOrderItem = (order: ImportOrderItem): Partial<OrderItem> =>
 export const toImportOrderItems = (rows: string[][]): ImportOrderItem[] => {
   if (rows.length < 2) return [];
 
-  const header = rows[0].map((cell) => cell?.trim() ?? "");
+  const header = rows[0].map((cell) => cell ?? "");
 
   return rows.slice(1).reduce<ImportOrderItem[]>((acc, row) => {
     const item = header.reduce<Record<string, string>>((itemAcc, key, index) => {
