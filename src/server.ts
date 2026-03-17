@@ -18,6 +18,20 @@ export const buildServer = () => {
       const stats = await runOrdersImport();
       app.log.info({ trigger, stats }, "Orders import completed");
 
+      const exportedCount = stats.created + stats.updated;
+      if (exportedCount > 0) {
+        await sendAlert({
+          title: "Успешная выгрузка Google Sheet -> Firestore",
+          description: [
+            `Триггер: ${trigger}`,
+            `Выгружено: ${exportedCount}`,
+            `Создано: ${stats.created}`,
+            `Обновлено: ${stats.updated}`,
+            `Пропущено (нет клиента): ${stats.skippedMissingUsers}`,
+          ].join("\n"),
+        });
+      }
+
       return stats;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown import error";
