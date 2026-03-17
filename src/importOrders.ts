@@ -1,6 +1,7 @@
 import { db } from "./firebase";
 import { fetchSheetRows } from "./googleSheets";
 import {
+  getMissingRequiredColumns,
   generateOrderItem,
   isImportTableValid,
   parseObject,
@@ -76,7 +77,13 @@ export const runOrdersImport = async (): Promise<ImportStats> => {
 
   const isTableValid = isImportTableValid(importItems[0]);
   if (!isTableValid) {
-    throw new Error("Проверьте наличие всех столбцов в таблице");
+    const missingColumns = getMissingRequiredColumns(importItems[0]);
+    const missingColumnsText =
+      missingColumns.length > 0 ? missingColumns.join(", ") : "Не удалось определить";
+
+    throw new Error(
+      `Проверьте наличие всех обязательных столбцов. Отсутствуют: ${missingColumnsText}`,
+    );
   }
 
   const usersMap = await getUsersMap();

@@ -13,7 +13,7 @@ const envSchema = z.object({
   FIREBASE_PRIVATE_KEY: z.string().min(1),
 
   GOOGLE_SPREADSHEET_ID: z.string().min(1),
-  GOOGLE_SHEET_NAME: z.string().min(1).default("list2"),
+  GOOGLE_SHEET_NAME: z.string().min(1).default("list1"),
   GOOGLE_SHEET_GID: z.string().min(1).optional(),
   CRON_SCHEDULE: z.string().default("0 12,18 * * *"),
   CRON_TZ: z.string().default("Europe/Moscow"),

@@ -69,6 +69,10 @@ export const isImportTableValid = (item: Record<string, string>) => {
   return REQUIRED_ORDER_ITEM_KEYS.every((key) => Object.hasOwn(item, key));
 };
 
+export const getMissingRequiredColumns = (item: Record<string, string>) => {
+  return REQUIRED_ORDER_ITEM_KEYS.filter((key) => !Object.hasOwn(item, key));
+};
+
 export const generateOrderItem = (order: ImportOrderItem): Partial<OrderItem> => {
   return {
     code: order["Номер накладной"].trim(),
