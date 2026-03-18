@@ -57,6 +57,7 @@ export const buildServer = () => {
   };
 
   app.get("/health", async () => ({ ok: true }));
+  app.get("/", async () => ({ ok: true, service: "eleven-cargo-import" }));
 
   app.post("/jobs/import-orders/run", async (request, reply) => {
     const authHeader = request.headers["x-job-token"];
