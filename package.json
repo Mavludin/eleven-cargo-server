@@ -13,6 +13,7 @@
   "author": "",
   "license": "UNLICENSED",
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
     "date-fns": "^4.1.0",
     "dotenv": "^17.3.1",
     "fastify": "^5.8.2",

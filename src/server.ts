@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import cron from "node-cron";
 
 import { sendAlert } from "./alerts";
@@ -10,6 +11,11 @@ export const buildServer = () => {
     logger: {
       level: env.LOG_LEVEL,
     },
+  });
+
+  app.register(cors, {
+    origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN,
+    methods: ["GET", "POST", "OPTIONS"],
   });
 
   const executeImport = async (trigger: "cron" | "manual") => {
@@ -62,15 +68,19 @@ export const buildServer = () => {
     return { ok: true, stats };
   });
 
-  cron.schedule(
-    env.CRON_SCHEDULE,
-    async () => {
-      await executeImport("cron");
-    },
-    {
-      timezone: env.CRON_TZ,
-    },
-  );
+  if (env.CRON_ENABLED) {
+    cron.schedule(
+      env.CRON_SCHEDULE,
+      async () => {
+        await executeImport("cron");
+      },
+      {
+        timezone: env.CRON_TZ,
+      },
+    );
+  } else {
+    app.log.warn("CRON disabled by CRON_ENABLED=false");
+  }
 
   return app;
 };
