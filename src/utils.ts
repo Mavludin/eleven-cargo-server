@@ -33,6 +33,10 @@ export const parseNumericField = (value: string) => {
   return Number.parseFloat(formatted);
 };
 
+const parseNumericOrZero = (value: string) => {
+  return parseNumericField(value) ?? 0;
+};
+
 export const parseDate = (dateISO: string) => {
   if (!dateISO) return null;
 
@@ -82,21 +86,21 @@ export const generateOrderItem = (order: ImportOrderItem): Partial<OrderItem> =>
     invoice: {
       title: order.Наименование,
       weight: parseNumericField(order.Вес),
-      volume: parseNumericField(order.Куб),
+      volume: parseNumericOrZero(order.Куб),
       price: parseNumericField(order.Цена),
       goods: parseNumericField(order.Страховка),
       percent: 1,
       insurance: parseNumericField(order["Сумма \nстраховки"]),
-      package: parseNumericField(order["Наша упаковка"]),
-      packageType: order["Вид упаковки"]?.trim(),
-      offload: parseNumericField(order.перегруз),
-      elevenRate: parseNumericField(order["Наш тариф"]),
-      finalPrice: parseNumericField(order["Сумма/$"]),
+      package: parseNumericOrZero(order["Наша упаковка"]),
+      packageType: order["Вид упаковки"]?.trim() || "",
+      offload: parseNumericOrZero(order.перегруз),
+      elevenRate: parseNumericOrZero(order["Наш тариф"]),
+      finalPrice: parseNumericOrZero(order["Сумма/$"]),
     },
     hiddenInvoice: {
-      density: parseNumericField(order.Плотность),
-      transAmount: parseNumericField(order["Сумма/"]),
-      orderIncome: parseNumericField(order["Прибыль с заказа"]),
+      density: parseNumericOrZero(order.Плотность),
+      transAmount: parseNumericOrZero(order["Сумма/"]),
+      orderIncome: parseNumericOrZero(order["Прибыль с заказа"]),
     },
   };
 };
