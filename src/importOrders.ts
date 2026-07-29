@@ -7,6 +7,7 @@ import {
   parseObject,
   toImportOrderItems,
 } from "./utils";
+import { sendNewOrdersPushNotifications } from "./pushNotifications";
 import type { ImportOrderItem, ImportStats, OrderItem, UserItem } from "./types";
 
 const FIRESTORE_BATCH_LIMIT = 500;
@@ -20,14 +21,16 @@ const chunkArray = <T>(items: T[], chunkSize: number): T[][] => {
   return chunks;
 };
 
-const getUsersMap = async () => {
+const getUsersData = async () => {
   const snapshot = await db.collection("users").get();
   const users = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as UserItem[];
 
-  return users.reduce<Record<string, UserItem | undefined>>((acc, user) => {
+  const byCode = users.reduce<Record<string, UserItem | undefined>>((acc, user) => {
     acc[user.code] = user;
     return acc;
   }, {});
+
+  return { users, byCode };
 };
 
 const getOrdersMapByCodes = async (codes: string[]) => {
@@ -107,7 +110,9 @@ const flushBatches = async (writes: PendingWrite[]) => {
   }
 };
 
-export const runOrdersImport = async (): Promise<ImportStats> => {
+export const runOrdersImport = async (
+  trigger: "cron" | "manual",
+): Promise<ImportStats> => {
   const sheetRows = await fetchSheetRows();
   const importItems = toImportOrderItems(sheetRows);
 
@@ -126,7 +131,7 @@ export const runOrdersImport = async (): Promise<ImportStats> => {
     );
   }
 
-  const usersMap = await getUsersMap();
+  const { users, byCode: usersMap } = await getUsersData();
 
   const orderCodes = importItems
     .map((item) => item["Номер накладной"]?.trim())
@@ -141,9 +146,12 @@ export const runOrdersImport = async (): Promise<ImportStats> => {
     updated: 0,
     skippedMissingUsers: 0,
     skippedEmptyRows: Math.max(0, sheetRows.length - importItems.length - 1),
+    pushRecipients: 0,
+    pushNotificationsSent: 0,
   };
 
   const pendingWrites: PendingWrite[] = [];
+  const newOrdersByOwner = new Map<string, string[]>();
 
   for (const item of importItems) {
     const user = usersMap[item["КОД"]];
@@ -166,6 +174,10 @@ export const runOrdersImport = async (): Promise<ImportStats> => {
 
       pendingWrites.push({ type: "create", code: orderCode, data });
       stats.created += 1;
+
+      const ownerCodes = newOrdersByOwner.get(user.id) ?? [];
+      ownerCodes.push(orderCode);
+      newOrdersByOwner.set(user.id, ownerCodes);
       continue;
     }
 
@@ -179,6 +191,16 @@ export const runOrdersImport = async (): Promise<ImportStats> => {
   }
 
   await flushBatches(pendingWrites);
+
+  if (trigger === "cron" && newOrdersByOwner.size > 0) {
+    try {
+      const pushStats = await sendNewOrdersPushNotifications(newOrdersByOwner, users);
+      stats.pushRecipients = pushStats.recipients;
+      stats.pushNotificationsSent = pushStats.sent;
+    } catch (error) {
+      console.error("Push notifications failed:", error);
+    }
+  }
 
   return stats;
 };

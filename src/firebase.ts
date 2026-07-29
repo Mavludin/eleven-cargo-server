@@ -13,3 +13,4 @@ if (admin.apps.length === 0) {
 }
 
 export const db = admin.firestore();
+export const messaging = admin.messaging();

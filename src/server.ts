@@ -21,7 +21,7 @@ export const buildServer = () => {
   const executeImport = async (trigger: "cron" | "manual") => {
     try {
       app.log.info({ trigger }, "Orders import started");
-      const stats = await runOrdersImport();
+      const stats = await runOrdersImport(trigger);
       app.log.info({ trigger, stats }, "Orders import completed");
 
       const exportedCount = stats.created + stats.updated;
@@ -34,6 +34,7 @@ export const buildServer = () => {
             `Создано: ${stats.created}`,
             `Обновлено: ${stats.updated}`,
             `Пропущено (нет клиента): ${stats.skippedMissingUsers}`,
+            `Пуши: ${stats.pushNotificationsSent} (${stats.pushRecipients} получателей)`,
           ].join("\n"),
         });
       }
