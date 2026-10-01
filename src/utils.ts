@@ -90,7 +90,7 @@ export const generateOrderItem = (order: ImportOrderItem): Partial<OrderItem> =>
       price: parseNumericField(order.Цена),
       goods: parseNumericField(order.Страховка),
       percent: 1,
-      insurance: parseNumericField(order["Сумма \nстраховки"]),
+      insurance: parseNumericOrZero(order["Сумма \nстраховки"]),
       package: parseNumericOrZero(order["Наша упаковка"]),
       packageType: order["Вид упаковки"]?.trim() || "",
       offload: parseNumericOrZero(order.перегруз),
