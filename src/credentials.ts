@@ -8,11 +8,11 @@ import { db } from "./firebase";
 const CREDENTIALS_COLLECTION = "credentials";
 const BCRYPT_ROUNDS = 10;
 
-const credentialsRef = (userId: string) => {
+export const credentialsRef = (userId: string) => {
   return db.collection(CREDENTIALS_COLLECTION).doc(userId);
 };
 
-const hashPassword = (password: string) => {
+export const hashPassword = (password: string) => {
   return bcrypt.hash(password, BCRYPT_ROUNDS);
 };
 
