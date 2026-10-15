@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import cron from "node-cron";
 
 import { sendAlert } from "./alerts";
+import { authRoutes } from "./auth";
 import { env } from "./config";
 import { runOrdersImport } from "./importOrders";
 
@@ -11,12 +12,15 @@ export const buildServer = () => {
     logger: {
       level: env.LOG_LEVEL,
     },
+    trustProxy: true,
   });
 
   app.register(cors, {
     origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN,
     methods: ["GET", "POST", "OPTIONS"],
   });
+
+  app.register(authRoutes);
 
   const executeImport = async (trigger: "cron" | "manual") => {
     try {

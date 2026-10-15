@@ -1,0 +1,135 @@
+import rateLimit from "@fastify/rate-limit";
+import admin from "firebase-admin";
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+
+import {
+  getPasswordHash,
+  isPasswordMatchingHash,
+  isSameSecret,
+  savePasswordHash,
+  toPlaintextPassword,
+} from "./credentials";
+import { db } from "./firebase";
+
+const CODE_ATTEMPTS_LIMIT = 10;
+const ATTEMPTS_WINDOW_MS = 15 * 60 * 1000;
+const MAX_TRACKED_CODES = 1000;
+
+const loginSchema = z.object({
+  code: z.string().trim().min(1).max(64),
+  password: z.string().min(1).max(128),
+});
+
+const toText = (value: unknown) => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+
+  return "";
+};
+
+const failedAttemptsByCode = new Map<string, { count: number; resetAt: number }>();
+
+const pruneExpiredAttempts = () => {
+  if (failedAttemptsByCode.size < MAX_TRACKED_CODES) return;
+
+  const now = Date.now();
+
+  for (const [code, attempts] of failedAttemptsByCode) {
+    if (now > attempts.resetAt) failedAttemptsByCode.delete(code);
+  }
+};
+
+const isCodeLocked = (code: string) => {
+  const attempts = failedAttemptsByCode.get(code);
+  if (!attempts) return false;
+
+  if (Date.now() > attempts.resetAt) {
+    failedAttemptsByCode.delete(code);
+    return false;
+  }
+
+  return attempts.count >= CODE_ATTEMPTS_LIMIT;
+};
+
+const registerFailedAttempt = (code: string) => {
+  const attempts = failedAttemptsByCode.get(code);
+
+  if (attempts && Date.now() <= attempts.resetAt) {
+    attempts.count += 1;
+    return;
+  }
+
+  pruneExpiredAttempts();
+  failedAttemptsByCode.set(code, { count: 1, resetAt: Date.now() + ATTEMPTS_WINDOW_MS });
+};
+
+const verifyPassword = async (userId: string, storedPassword: unknown, password: string) => {
+  const passwordHash = await getPasswordHash(userId);
+  const plaintextPassword = toPlaintextPassword(storedPassword);
+
+  if (plaintextPassword !== undefined) {
+    if (!isSameSecret(password, plaintextPassword)) return false;
+
+    if (!(await isPasswordMatchingHash(password, passwordHash))) {
+      await savePasswordHash(userId, password);
+    }
+
+    return true;
+  }
+
+  return isPasswordMatchingHash(password, passwordHash);
+};
+
+export const authRoutes = async (app: FastifyInstance) => {
+  await app.register(rateLimit, { global: false });
+
+  app.post(
+    "/auth/login",
+    { config: { rateLimit: { max: 30, timeWindow: "15 minutes" } } },
+    async (request, reply) => {
+      const parsed = loginSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ message: "Invalid request" });
+      }
+
+      const { code, password } = parsed.data;
+
+      if (isCodeLocked(code)) {
+        return reply.code(429).send({ message: "Too many attempts" });
+      }
+
+      const snapshot = await db.collection("users").where("code", "==", code).limit(2).get();
+
+      if (snapshot.size > 1) {
+        request.log.error({ code }, "Several users share the same code");
+      }
+
+      const userDoc = snapshot.size === 1 ? snapshot.docs[0] : undefined;
+
+      if (!userDoc || !(await verifyPassword(userDoc.id, userDoc.get("password"), password))) {
+        registerFailedAttempt(code);
+        request.log.warn({ code }, "Failed login attempt");
+
+        return reply.code(401).send({ message: "Invalid credentials" });
+      }
+
+      failedAttemptsByCode.delete(code);
+
+      const token = await admin.auth().createCustomToken(userDoc.id);
+
+      return {
+        token,
+        user: {
+          id: userDoc.id,
+          code: toText(userDoc.get("code")) || code,
+          email: toText(userDoc.get("email")),
+          phone: toText(userDoc.get("phone")),
+          firstname: toText(userDoc.get("firstname")),
+          lastname: toText(userDoc.get("lastname")),
+          city: toText(userDoc.get("city")),
+        },
+      };
+    },
+  );
+};
