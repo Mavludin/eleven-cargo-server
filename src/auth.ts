@@ -1,13 +1,15 @@
 import rateLimit from "@fastify/rate-limit";
 import admin from "firebase-admin";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { env } from "./config";
 import {
   getPasswordHash,
   isPasswordMatchingHash,
   isSameSecret,
   savePasswordHash,
+  setUserPassword,
   toPlaintextPassword,
 } from "./credentials";
 import { db } from "./firebase";
@@ -19,6 +21,10 @@ const MAX_TRACKED_CODES = 1000;
 const loginSchema = z.object({
   code: z.string().trim().min(1).max(64),
   password: z.string().min(1).max(128),
+});
+
+const setPasswordSchema = z.object({
+  password: z.string().min(6).max(128),
 });
 
 const toText = (value: unknown) => {
@@ -81,6 +87,26 @@ const verifyPassword = async (userId: string, storedPassword: unknown, password:
   return isPasswordMatchingHash(password, passwordHash);
 };
 
+const getAdminUid = async (request: FastifyRequest) => {
+  const header = request.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return undefined;
+
+  try {
+    const { uid } = await admin.auth().verifyIdToken(header.slice("Bearer ".length));
+
+    return env.ADMIN_UIDS.includes(uid) ? uid : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const isUserNotFoundError = (error: unknown) => {
+  return typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "auth/user-not-found";
+};
+
 export const authRoutes = async (app: FastifyInstance) => {
   await app.register(rateLimit, { global: false });
 
@@ -130,6 +156,43 @@ export const authRoutes = async (app: FastifyInstance) => {
           city: toText(userDoc.get("city")),
         },
       };
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/admin/users/:id/password",
+    { config: { rateLimit: { max: 60, timeWindow: "15 minutes" } } },
+    async (request, reply) => {
+      const adminUid = await getAdminUid(request);
+      if (!adminUid) {
+        return reply.code(403).send({ message: "Forbidden" });
+      }
+
+      const parsed = setPasswordSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ message: "Password must be 6 to 128 characters" });
+      }
+
+      const userId = request.params.id;
+      const userSnapshot = await db.collection("users").doc(userId).get();
+
+      if (!userSnapshot.exists) {
+        return reply.code(404).send({ message: "User not found" });
+      }
+
+      await setUserPassword(userId, parsed.data.password);
+
+      try {
+        await admin.auth().revokeRefreshTokens(userId);
+      } catch (error) {
+        if (!isUserNotFoundError(error)) {
+          request.log.error({ err: error, userId }, "Password set, but sessions were not revoked");
+        }
+      }
+
+      request.log.info({ userId, adminUid }, "Password set by admin");
+
+      return { ok: true };
     },
   );
 };

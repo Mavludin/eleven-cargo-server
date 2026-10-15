@@ -53,6 +53,7 @@ const envSchema = z.object({
   ALERT_TELEGRAM_BOT_TOKEN: z.string().optional(),
   ALERT_TELEGRAM_CHAT_ID: z.string().optional(),
   JOB_TOKEN: z.string().optional(),
+  ADMIN_UIDS: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(normalizedProcessEnv);
@@ -65,4 +66,5 @@ export const env = {
   ...parsed.data,
   CORS_ORIGIN: parsed.data.CORS_ORIGIN.replace(/\/+$/, ""),
   FIREBASE_PRIVATE_KEY: parsed.data.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n").replace(/\r/g, ""),
+  ADMIN_UIDS: parsed.data.ADMIN_UIDS.split(",").map((uid) => uid.trim()).filter(Boolean),
 } as const;
