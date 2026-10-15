@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 
 import bcrypt from "bcryptjs";
+import { FieldValue } from "firebase-admin/firestore";
 
 import { db } from "./firebase";
 
@@ -44,4 +45,16 @@ export const savePasswordHash = async (userId: string, password: string) => {
     passwordHash: await hashPassword(password),
     updatedAt: new Date().toISOString(),
   });
+};
+
+export const setUserPassword = async (userId: string, password: string) => {
+  const batch = db.batch();
+
+  batch.set(credentialsRef(userId), {
+    passwordHash: await hashPassword(password),
+    updatedAt: new Date().toISOString(),
+  });
+  batch.update(db.collection("users").doc(userId), { password: FieldValue.delete() });
+
+  await batch.commit();
 };
