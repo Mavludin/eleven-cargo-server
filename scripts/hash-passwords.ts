@@ -39,6 +39,24 @@ const main = async () => {
   const users = (await db.collection("users").get()).docs;
   const states: UserState[] = [];
 
+  const idsByCode = new Map<string, string[]>();
+  const invalidCodeIds: string[] = [];
+
+  for (const user of users) {
+    const code = user.get("code");
+
+    if (typeof code !== "string" || code.trim() === "") {
+      invalidCodeIds.push(user.id);
+      continue;
+    }
+
+    idsByCode.set(code, [...(idsByCode.get(code) ?? []), user.id]);
+  }
+
+  const duplicateCodes = [...idsByCode].filter(([, ids]) => ids.length > 1).map(([code]) => code);
+  const untrimmedCodes = [...idsByCode.keys()].filter((code) => code !== code.trim());
+  const idMismatchCodes = users.filter((user) => user.get("id") !== user.id).map((user) => String(user.get("code")));
+
   for (let i = 0; i < users.length; i += GET_ALL_CHUNK_SIZE) {
     const chunk = users.slice(i, i + GET_ALL_CHUNK_SIZE);
     const credentials = await db.getAll(...chunk.map((user) => credentialsRef(user.id)));
@@ -72,10 +90,22 @@ const main = async () => {
     "plaintext without matching hash (need --hash)": needsHash.length,
     "hash only (done)": hashOnly.length,
     "no password at all (cannot log in)": noPassword.length,
+    "duplicate codes (cannot log in)": duplicateCodes.length,
+    "code missing or not a string (cannot log in)": invalidCodeIds.length,
+    "codes with surrounding spaces (cannot log in)": untrimmedCodes.length,
+    "id field != doc id (orders not shown)": idMismatchCodes.length,
   });
 
-  if (noPassword.length > 0) {
-    console.log("No password, set one in the admin panel:", noPassword.map(({ user }) => user.get("code")).join(", "));
+  const problems: [string, string[]][] = [
+    ["No password, set one in the admin panel", noPassword.map(({ user }) => String(user.get("code")))],
+    ["Duplicate codes, make them unique", duplicateCodes],
+    ["Code missing or not a string (user doc ids), fix the code", invalidCodeIds],
+    ["Codes with surrounding spaces, trim them", untrimmedCodes.map((code) => JSON.stringify(code))],
+    ["id field differs from the document id", idMismatchCodes],
+  ];
+
+  for (const [title, codes] of problems) {
+    if (codes.length > 0) console.log(`${title}: ${codes.join(", ")}`);
   }
 
   if (args.mode === "dry-run") {

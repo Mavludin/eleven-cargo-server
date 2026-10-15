@@ -8,15 +8,15 @@ import {
   getPasswordHash,
   isPasswordMatchingHash,
   isSameSecret,
-  savePasswordHash,
   setUserPassword,
+  syncPasswordHash,
   toPlaintextPassword,
 } from "./credentials";
 import { db } from "./firebase";
 
 const CODE_ATTEMPTS_LIMIT = 10;
 const ATTEMPTS_WINDOW_MS = 15 * 60 * 1000;
-const MAX_TRACKED_CODES = 1000;
+const MAX_TRACKED_CODES = 10_000;
 
 const loginSchema = z.object({
   code: z.string().trim().min(1).max(64),
@@ -36,13 +36,18 @@ const toText = (value: unknown) => {
 
 const failedAttemptsByCode = new Map<string, { count: number; resetAt: number }>();
 
-const pruneExpiredAttempts = () => {
+const pruneAttempts = () => {
   if (failedAttemptsByCode.size < MAX_TRACKED_CODES) return;
 
   const now = Date.now();
 
   for (const [code, attempts] of failedAttemptsByCode) {
     if (now > attempts.resetAt) failedAttemptsByCode.delete(code);
+  }
+
+  const oldest = failedAttemptsByCode.keys().next();
+  if (failedAttemptsByCode.size >= MAX_TRACKED_CODES && !oldest.done) {
+    failedAttemptsByCode.delete(oldest.value);
   }
 };
 
@@ -66,7 +71,7 @@ const registerFailedAttempt = (code: string) => {
     return;
   }
 
-  pruneExpiredAttempts();
+  pruneAttempts();
   failedAttemptsByCode.set(code, { count: 1, resetAt: Date.now() + ATTEMPTS_WINDOW_MS });
 };
 
@@ -78,7 +83,7 @@ const verifyPassword = async (userId: string, storedPassword: unknown, password:
     if (!isSameSecret(password, plaintextPassword)) return false;
 
     if (!(await isPasswordMatchingHash(password, passwordHash))) {
-      await savePasswordHash(userId, password);
+      await syncPasswordHash(userId, password);
     }
 
     return true;
@@ -93,11 +98,14 @@ const getAdminUid = async (request: FastifyRequest) => {
 
   try {
     const { uid } = await admin.auth().verifyIdToken(header.slice("Bearer ".length));
+    if (env.ADMIN_UIDS.includes(uid)) return uid;
 
-    return env.ADMIN_UIDS.includes(uid) ? uid : undefined;
-  } catch {
-    return undefined;
+    request.log.warn({ uid }, "Token uid is not in ADMIN_UIDS");
+  } catch (error) {
+    request.log.warn({ err: error }, "Admin token verification failed");
   }
+
+  return undefined;
 };
 
 const isUserNotFoundError = (error: unknown) => {
@@ -112,7 +120,7 @@ export const authRoutes = async (app: FastifyInstance) => {
 
   app.post(
     "/auth/login",
-    { config: { rateLimit: { max: 30, timeWindow: "15 minutes" } } },
+    { config: { rateLimit: { max: 100, timeWindow: "15 minutes" } } },
     async (request, reply) => {
       const parsed = loginSchema.safeParse(request.body);
       if (!parsed.success) {

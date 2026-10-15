@@ -40,10 +40,15 @@ export const isSameSecret = (a: string, b: string) => {
   return left.length === right.length && timingSafeEqual(left, right);
 };
 
-export const savePasswordHash = async (userId: string, password: string) => {
-  await credentialsRef(userId).set({
-    passwordHash: await hashPassword(password),
-    updatedAt: new Date().toISOString(),
+export const syncPasswordHash = async (userId: string, password: string) => {
+  const passwordHash = await hashPassword(password);
+  const userRef = db.collection("users").doc(userId);
+
+  await db.runTransaction(async (transaction) => {
+    const user = await transaction.get(userRef);
+    if (toPlaintextPassword(user.get("password")) !== password) return;
+
+    transaction.set(credentialsRef(userId), { passwordHash, updatedAt: new Date().toISOString() });
   });
 };
 
