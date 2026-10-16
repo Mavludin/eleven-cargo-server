@@ -1,6 +1,6 @@
 import rateLimit from "@fastify/rate-limit";
 import admin from "firebase-admin";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { env } from "./config";
@@ -25,6 +25,10 @@ const loginSchema = z.object({
 
 const setPasswordSchema = z.object({
   password: z.string().min(6).max(128),
+});
+
+const userParamsSchema = z.object({
+  id: z.string().min(1).max(128).regex(/^[^/]+$/),
 });
 
 const toText = (value: unknown) => {
@@ -75,7 +79,12 @@ const registerFailedAttempt = (code: string) => {
   failedAttemptsByCode.set(code, { count: 1, resetAt: Date.now() + ATTEMPTS_WINDOW_MS });
 };
 
-const verifyPassword = async (userId: string, storedPassword: unknown, password: string) => {
+const verifyPassword = async (
+  log: FastifyBaseLogger,
+  userId: string,
+  storedPassword: unknown,
+  password: string,
+) => {
   const passwordHash = await getPasswordHash(userId);
   const plaintextPassword = toPlaintextPassword(storedPassword);
 
@@ -83,7 +92,9 @@ const verifyPassword = async (userId: string, storedPassword: unknown, password:
     if (!isSameSecret(password, plaintextPassword)) return false;
 
     if (!(await isPasswordMatchingHash(password, passwordHash))) {
-      await syncPasswordHash(userId, password);
+      await syncPasswordHash(userId, password).catch((error: unknown) => {
+        log.error({ err: error, userId }, "Password hash was not synced");
+      });
     }
 
     return true;
@@ -133,6 +144,8 @@ export const authRoutes = async (app: FastifyInstance) => {
         return reply.code(429).send({ message: "Too many attempts" });
       }
 
+      registerFailedAttempt(code);
+
       const snapshot = await db.collection("users").where("code", "==", code).limit(2).get();
 
       if (snapshot.size > 1) {
@@ -141,8 +154,7 @@ export const authRoutes = async (app: FastifyInstance) => {
 
       const userDoc = snapshot.size === 1 ? snapshot.docs[0] : undefined;
 
-      if (!userDoc || !(await verifyPassword(userDoc.id, userDoc.get("password"), password))) {
-        registerFailedAttempt(code);
+      if (!userDoc || !(await verifyPassword(request.log, userDoc.id, userDoc.get("password"), password))) {
         request.log.warn({ code }, "Failed login attempt");
 
         return reply.code(401).send({ message: "Invalid credentials" });
@@ -167,7 +179,7 @@ export const authRoutes = async (app: FastifyInstance) => {
     },
   );
 
-  app.post<{ Params: { id: string } }>(
+  app.post(
     "/admin/users/:id/password",
     { config: { rateLimit: { max: 60, timeWindow: "15 minutes" } } },
     async (request, reply) => {
@@ -176,12 +188,17 @@ export const authRoutes = async (app: FastifyInstance) => {
         return reply.code(403).send({ message: "Forbidden" });
       }
 
+      const parsedParams = userParamsSchema.safeParse(request.params);
+      if (!parsedParams.success) {
+        return reply.code(400).send({ message: "Invalid user id" });
+      }
+
       const parsed = setPasswordSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.code(400).send({ message: "Password must be 6 to 128 characters" });
       }
 
-      const userId = request.params.id;
+      const userId = parsedParams.data.id;
       const userSnapshot = await db.collection("users").doc(userId).get();
 
       if (!userSnapshot.exists) {
