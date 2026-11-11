@@ -6,6 +6,7 @@ import { sendAlert } from "./alerts";
 import { authRoutes } from "./auth";
 import { env } from "./config";
 import { runOrdersImport } from "./importOrders";
+import { getImportStatus, recordImportFailure, recordImportSuccess } from "./importStatus";
 
 export const buildServer = () => {
   const app = Fastify({
@@ -26,6 +27,7 @@ export const buildServer = () => {
     try {
       app.log.info({ trigger }, "Orders import started");
       const stats = await runOrdersImport(trigger);
+      recordImportSuccess();
       app.log.info({ trigger, stats }, "Orders import completed");
 
       const exportedCount = stats.created + stats.updated;
@@ -45,6 +47,7 @@ export const buildServer = () => {
 
       return stats;
     } catch (error) {
+      recordImportFailure();
       const message = error instanceof Error ? error.message : "Unknown import error";
       app.log.error({ trigger, err: error }, "Orders import failed");
 
@@ -62,6 +65,10 @@ export const buildServer = () => {
   };
 
   app.get("/health", async () => ({ ok: true }));
+  app.get("/status", async (_request, reply) => {
+    const status = getImportStatus();
+    return reply.code(status.ok ? 200 : 503).send(status);
+  });
   app.get("/", async () => ({ ok: true, service: "eleven-cargo-import" }));
 
   app.post("/jobs/import-orders/run", async (request, reply) => {
