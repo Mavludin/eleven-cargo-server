@@ -15,7 +15,7 @@ export const sendAlert = async ({ title, description }: AlertPayload) => {
     return;
   }
 
-  const url = `https://api.telegram.org/bot${env.ALERT_TELEGRAM_BOT_TOKEN}/sendMessage`;
+  const url = `${env.ALERT_TELEGRAM_API_URL}/bot${env.ALERT_TELEGRAM_BOT_TOKEN}/sendMessage`;
 
   try {
     const response = await fetch(url, {
