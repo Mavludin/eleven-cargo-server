@@ -52,6 +52,7 @@ const envSchema = z.object({
 
   ALERT_TELEGRAM_BOT_TOKEN: z.string().optional(),
   ALERT_TELEGRAM_CHAT_ID: z.string().optional(),
+  ALERT_TELEGRAM_API_URL: z.url().default("https://api.telegram.org"),
   JOB_TOKEN: z.string().optional(),
   ADMIN_UIDS: z.string().default(""),
 });
@@ -65,6 +66,7 @@ if (!parsed.success) {
 export const env = {
   ...parsed.data,
   CORS_ORIGIN: parsed.data.CORS_ORIGIN.replace(/\/+$/, ""),
+  ALERT_TELEGRAM_API_URL: parsed.data.ALERT_TELEGRAM_API_URL.replace(/\/+$/, ""),
   FIREBASE_PRIVATE_KEY: parsed.data.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n").replace(/\r/g, ""),
   ADMIN_UIDS: parsed.data.ADMIN_UIDS.split(",").map((uid) => uid.trim()).filter(Boolean),
 } as const;
