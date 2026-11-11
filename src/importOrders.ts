@@ -53,6 +53,10 @@ const getOrdersMapByCodes = async (codes: string[]) => {
   return result;
 };
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null && Object.getPrototypeOf(value) === Object.prototype;
+};
+
 const isSameValue = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
   if (a == null && b == null) return true;
@@ -65,16 +69,19 @@ const isSameValue = (a: unknown, b: unknown): boolean => {
   return false;
 };
 
-const hasMeaningfulChanges = (
-  patch: Partial<OrderItem>,
-  existing: OrderItem,
+const isPatchApplied = (
+  patch: Record<string, unknown>,
+  existing: Record<string, unknown>,
 ): boolean => {
-  for (const key of Object.keys(patch) as (keyof OrderItem)[]) {
-    if (!isSameValue(patch[key], existing[key])) {
-      return true;
+  return Object.entries(patch).every(([key, value]) => {
+    const current = existing[key];
+
+    if (isPlainObject(value)) {
+      return isPlainObject(current) && isPatchApplied(value, current);
     }
-  }
-  return false;
+
+    return isSameValue(value, current);
+  });
 };
 
 type PendingCreate = {
@@ -182,7 +189,7 @@ export const runOrdersImport = async (
     }
 
     const patch: Partial<OrderItem> = { ...parsedOrder, userId: user.id };
-    if (!hasMeaningfulChanges(patch, existingOrder)) {
+    if (isPatchApplied(patch, existingOrder)) {
       continue;
     }
 
