@@ -48,6 +48,7 @@ const envSchema = z.object({
   CRON_ENABLED: normalizeBoolean.default(true),
   CRON_SCHEDULE: z.string().default("0 12,18 * * *"),
   CRON_TZ: z.string().default("Europe/Moscow"),
+  IMPORT_MAX_AGE_HOURS: z.coerce.number().positive().default(19),
   CORS_ORIGIN: z.string().default("*"),
 
   ALERT_TELEGRAM_BOT_TOKEN: z.string().optional(),
