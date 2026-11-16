@@ -79,4 +79,5 @@ export type ImportStats = {
   skippedEmptyRows: number;
   pushRecipients: number;
   pushNotificationsSent: number;
+  duplicateOrderCodes: string[];
 };

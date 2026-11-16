@@ -84,6 +84,25 @@ const isPatchApplied = (
   });
 };
 
+const keepLastRowPerOrderCode = (items: ImportOrderItem[]) => {
+  const lastIndexByCode = new Map<string, number>();
+  const duplicateCodes = new Set<string>();
+
+  items.forEach((item, index) => {
+    const code = item["Номер накладной"]?.trim();
+    if (!code) return;
+    if (lastIndexByCode.has(code)) duplicateCodes.add(code);
+    lastIndexByCode.set(code, index);
+  });
+
+  const uniqueItems = items.filter((item, index) => {
+    const code = item["Номер накладной"]?.trim();
+    return !code || lastIndexByCode.get(code) === index;
+  });
+
+  return { uniqueItems, duplicateCodes: Array.from(duplicateCodes) };
+};
+
 type PendingCreate = {
   type: "create";
   code: string;
@@ -139,8 +158,9 @@ export const runOrdersImport = async (
   }
 
   const { users, byCode: usersMap } = await getUsersData();
+  const { uniqueItems, duplicateCodes } = keepLastRowPerOrderCode(importItems);
 
-  const orderCodes = importItems
+  const orderCodes = uniqueItems
     .map((item) => item["Номер накладной"]?.trim())
     .filter((code): code is string => Boolean(code));
 
@@ -155,12 +175,13 @@ export const runOrdersImport = async (
     skippedEmptyRows: Math.max(0, sheetRows.length - importItems.length - 1),
     pushRecipients: 0,
     pushNotificationsSent: 0,
+    duplicateOrderCodes: duplicateCodes,
   };
 
   const pendingWrites: PendingWrite[] = [];
   const newOrdersByOwner = new Map<string, string[]>();
 
-  for (const item of importItems) {
+  for (const item of uniqueItems) {
     const user = usersMap[item["КОД"]];
     if (!user) {
       stats.skippedMissingUsers += 1;
