@@ -29,6 +29,7 @@ npm run start
 - `GET /` - базовый health endpoint
 - `GET /health` - healthcheck
 - `GET /status` - состояние импорта для внешнего монитора: 200 или 503 с `problem` (`import_failed`, `import_stale`)
+- `POST /admin/errors` - отчёт об ошибке из админки (Bearer ID-токен админа) → лог и Telegram
 - `POST /jobs/import-orders/run` - ручной запуск импорта  
   Если задан `JOB_TOKEN`, передавай header `x-job-token`.
 

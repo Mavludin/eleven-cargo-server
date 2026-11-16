@@ -3,6 +3,7 @@ import admin from "firebase-admin";
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { sendAlert } from "./alerts";
 import { env } from "./config";
 import {
   getPasswordHash,
@@ -25,6 +26,15 @@ const loginSchema = z.object({
 
 const setPasswordSchema = z.object({
   password: z.string().min(6).max(128),
+});
+
+const adminErrorSchema = z.object({
+  message: z.string().trim().min(1).max(1000),
+  context: z.string().trim().max(3000).optional(),
+  page: z.string().trim().max(500).optional(),
+  userAgent: z.string().trim().max(500).optional(),
+  online: z.boolean().optional(),
+  occurredAt: z.string().trim().max(64).optional(),
 });
 
 const userParamsSchema = z.object({
@@ -103,15 +113,15 @@ const verifyPassword = async (
   return isPasswordMatchingHash(password, passwordHash);
 };
 
-const getAdminUid = async (request: FastifyRequest) => {
+const getAdminToken = async (request: FastifyRequest) => {
   const header = request.headers.authorization;
   if (!header?.startsWith("Bearer ")) return undefined;
 
   try {
-    const { uid } = await admin.auth().verifyIdToken(header.slice("Bearer ".length));
-    if (env.ADMIN_UIDS.includes(uid)) return uid;
+    const token = await admin.auth().verifyIdToken(header.slice("Bearer ".length));
+    if (env.ADMIN_UIDS.includes(token.uid)) return token;
 
-    request.log.warn({ uid }, "Token uid is not in ADMIN_UIDS");
+    request.log.warn({ uid: token.uid }, "Token uid is not in ADMIN_UIDS");
   } catch (error) {
     request.log.warn({ err: error }, "Admin token verification failed");
   }
@@ -183,7 +193,7 @@ export const authRoutes = async (app: FastifyInstance) => {
     "/admin/users/:id/password",
     { config: { rateLimit: { max: 60, timeWindow: "15 minutes" } } },
     async (request, reply) => {
-      const adminUid = await getAdminUid(request);
+      const adminUid = (await getAdminToken(request))?.uid;
       if (!adminUid) {
         return reply.code(403).send({ message: "Forbidden" });
       }
@@ -218,6 +228,44 @@ export const authRoutes = async (app: FastifyInstance) => {
       request.log.info({ userId, adminUid }, "Password set by admin");
 
       return { ok: true };
+    },
+  );
+
+  app.post(
+    "/admin/errors",
+    { config: { rateLimit: { max: 30, timeWindow: "15 minutes" } } },
+    async (request, reply) => {
+      const adminToken = await getAdminToken(request);
+      if (!adminToken) {
+        return reply.code(403).send({ message: "Forbidden" });
+      }
+
+      const parsed = adminErrorSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ message: "Invalid error report" });
+      }
+
+      const report = parsed.data;
+      const adminName = adminToken.email ?? adminToken.uid;
+
+      request.log.warn({ adminUid: adminToken.uid, report }, "Admin panel error");
+
+      void sendAlert({
+        title: "Ошибка в админке",
+        description: [
+          `Админ: ${adminName}`,
+          `Ошибка: ${report.message}`,
+          report.context && `Подробности: ${report.context}`,
+          report.online !== undefined && `Сеть в браузере: ${report.online ? "есть" : "нет"}`,
+          report.page && `Страница: ${report.page}`,
+          report.userAgent && `Браузер: ${report.userAgent}`,
+          report.occurredAt && `Время: ${report.occurredAt}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      });
+
+      return reply.code(202).send({ ok: true });
     },
   );
 };
