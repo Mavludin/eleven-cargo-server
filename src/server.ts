@@ -8,6 +8,8 @@ import { env } from "./config";
 import { runOrdersImport } from "./importOrders";
 import { getImportStatus, recordImportFailure, recordImportSuccess } from "./importStatus";
 
+const MAX_REPORTED_DUPLICATES = 50;
+
 export const buildServer = () => {
   const app = Fastify({
     logger: {
@@ -31,7 +33,8 @@ export const buildServer = () => {
       app.log.info({ trigger, stats }, "Orders import completed");
 
       const exportedCount = stats.created + stats.updated;
-      if (exportedCount > 0) {
+      const duplicateCount = stats.duplicateOrderCodes.length;
+      if (exportedCount > 0 || duplicateCount > 0) {
         await sendAlert({
           title: "Успешная выгрузка Google Sheet -> Firestore",
           description: [
@@ -41,7 +44,13 @@ export const buildServer = () => {
             `Обновлено: ${stats.updated}`,
             `Пропущено (нет клиента): ${stats.skippedMissingUsers}`,
             `Пуши: ${stats.pushNotificationsSent} (${stats.pushRecipients} получателей)`,
-          ].join("\n"),
+            duplicateCount > 0 &&
+              `Номера накладных повторяются в таблице (${duplicateCount}), выгружена только нижняя строка: ${stats.duplicateOrderCodes
+                .slice(0, MAX_REPORTED_DUPLICATES)
+                .join(", ")}${duplicateCount > MAX_REPORTED_DUPLICATES ? " и др." : ""}`,
+          ]
+            .filter(Boolean)
+            .join("\n"),
         });
       }
 
