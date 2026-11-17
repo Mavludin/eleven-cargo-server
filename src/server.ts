@@ -45,7 +45,7 @@ export const buildServer = () => {
             `Пропущено (нет клиента): ${stats.skippedMissingUsers}`,
             `Пуши: ${stats.pushNotificationsSent} (${stats.pushRecipients} получателей)`,
             duplicateCount > 0 &&
-              `Номера накладных повторяются в таблице (${duplicateCount}), выгружена только нижняя строка: ${stats.duplicateOrderCodes
+              `Номера накладных повторяются в таблице (${duplicateCount}), выгружен груз с более поздней датой прибытия:${stats.duplicateOrderCodes
                 .slice(0, MAX_REPORTED_DUPLICATES)
                 .join(", ")}${duplicateCount > MAX_REPORTED_DUPLICATES ? " и др." : ""}`,
           ]

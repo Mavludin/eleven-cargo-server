@@ -4,6 +4,7 @@ import {
   getMissingRequiredColumns,
   generateOrderItem,
   isImportTableValid,
+  parseDate,
   parseObject,
   toImportOrderItems,
 } from "./utils";
@@ -84,20 +85,34 @@ const isPatchApplied = (
   });
 };
 
-const keepLastRowPerOrderCode = (items: ImportOrderItem[]) => {
-  const lastIndexByCode = new Map<string, number>();
+const getArrivalTime = (item: ImportOrderItem) => {
+  const arrivalDate = parseDate(item["Дата прибытия мск\""]);
+  return arrivalDate ? Date.parse(arrivalDate) : Number.POSITIVE_INFINITY;
+};
+
+const keepNewestRowPerOrderCode = (items: ImportOrderItem[]) => {
+  const newestIndexByCode = new Map<string, number>();
   const duplicateCodes = new Set<string>();
 
   items.forEach((item, index) => {
     const code = item["Номер накладной"]?.trim();
     if (!code) return;
-    if (lastIndexByCode.has(code)) duplicateCodes.add(code);
-    lastIndexByCode.set(code, index);
+
+    const keptIndex = newestIndexByCode.get(code);
+    if (keptIndex === undefined) {
+      newestIndexByCode.set(code, index);
+      return;
+    }
+
+    duplicateCodes.add(code);
+    if (getArrivalTime(item) >= getArrivalTime(items[keptIndex])) {
+      newestIndexByCode.set(code, index);
+    }
   });
 
   const uniqueItems = items.filter((item, index) => {
     const code = item["Номер накладной"]?.trim();
-    return !code || lastIndexByCode.get(code) === index;
+    return !code || newestIndexByCode.get(code) === index;
   });
 
   return { uniqueItems, duplicateCodes: Array.from(duplicateCodes) };
@@ -158,7 +173,7 @@ export const runOrdersImport = async (
   }
 
   const { users, byCode: usersMap } = await getUsersData();
-  const { uniqueItems, duplicateCodes } = keepLastRowPerOrderCode(importItems);
+  const { uniqueItems, duplicateCodes } = keepNewestRowPerOrderCode(importItems);
 
   const orderCodes = uniqueItems
     .map((item) => item["Номер накладной"]?.trim())
