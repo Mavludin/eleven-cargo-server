@@ -1,4 +1,4 @@
-import { isValid, parse } from "date-fns";
+import { isValid, parseISO } from "date-fns";
 
 import {
   REQUIRED_ORDER_ITEM_KEYS,
@@ -7,7 +7,8 @@ import {
   type OrderItem,
 } from "./types";
 
-const DATE_FORMATS = ["dd-MM-yyyy", "dd/MM/yyyy", "dd.MM.yyyy", "dd,MM,yyyy"] as const;
+const DATE_PATTERN = /^(\d{1,2})([-/.,])(\d{1,2})\2(\d{1,4})$/;
+const DOT_DECIMAL_PATTERN = /^(?:\d*|\d{1,3}(?:,\d{3})+)\.\d+$/;
 const NUMERIC_COLUMNS = new Set([
   "Вес",
   "Куб",
@@ -26,29 +27,32 @@ const sanitizeNumericValue = (value: string) => {
   return value.replace(/[^0-9,.\-]/g, "").trim();
 };
 
-export const parseNumericField = (value: string) => {
-  const formatted = value.trim().match(/[0-9,]/gm)?.join("").replaceAll(",", ".");
+export const parseNumericField = (value = "") => {
+  const sign = value.trim().startsWith("-") ? -1 : 1;
+  const formatted = value.replace(/[^0-9,.]/g, "");
+  const normalized = DOT_DECIMAL_PATTERN.test(formatted)
+    ? formatted.replaceAll(",", "")
+    : formatted.replaceAll(".", "").replaceAll(",", ".");
+  const amount = Number.parseFloat(normalized);
 
-  if (formatted === undefined) return undefined;
-  return Number.parseFloat(formatted);
+  return Number.isFinite(amount) ? sign * amount : undefined;
 };
 
-const parseNumericOrZero = (value: string) => {
+const parseNumericOrZero = (value?: string) => {
   return parseNumericField(value) ?? 0;
 };
 
-export const parseDate = (dateISO: string) => {
-  if (!dateISO) return null;
+export const parseDate = (value: string) => {
+  if (!value) return null;
 
-  for (const format of DATE_FORMATS) {
-    const date = parse(dateISO.trim(), format, new Date());
+  const parts = DATE_PATTERN.exec(value.trim());
+  if (!parts) return null;
 
-    if (isValid(date)) {
-      return date.toISOString();
-    }
-  }
+  const [, day, , month, year] = parts;
+  if (Number(year) === 0) return null;
 
-  return null;
+  const dateISO = `${year.padStart(4, "0")}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T00:00:00.000Z`;
+  return isValid(parseISO(dateISO)) ? dateISO : null;
 };
 
 type Hash = {
