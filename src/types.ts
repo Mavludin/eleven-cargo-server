@@ -25,7 +25,7 @@ export const REQUIRED_ORDER_ITEM_KEYS = ORDER_ITEM_KEYS.filter((key) => {
 });
 
 type ImportOrderKey = (typeof ORDER_ITEM_KEYS)[number];
-export type ImportOrderItem = Record<ImportOrderKey, string>;
+export type ImportOrderItem = Record<ImportOrderKey, string> & { "Упаковочный"?: string };
 
 export type PushTokenEntry = {
   token: string;
@@ -49,6 +49,7 @@ export type OrderItem = {
   paymentStatus?: "wait" | "paid";
   deliveryPeriod: string;
   createdate?: string;
+  packingList?: string;
   invoice: {
     title: string;
     weight?: number;
