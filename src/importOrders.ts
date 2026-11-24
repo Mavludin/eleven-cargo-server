@@ -1,3 +1,5 @@
+import { FieldValue } from "firebase-admin/firestore";
+
 import { db } from "./firebase";
 import { fetchSheetRows } from "./googleSheets";
 import {
@@ -204,6 +206,11 @@ export const runOrdersImport = async (
     }
 
     const parsedOrder = parseObject(generateOrderItem(item)) as Partial<OrderItem>;
+    const packingList = item["Упаковочный"];
+    if (packingList?.trim()) {
+      parsedOrder.packingList = packingList;
+    }
+
     const orderCode = item["Номер накладной"].trim();
     const existingOrder = ordersMap[orderCode];
 
@@ -225,11 +232,15 @@ export const runOrdersImport = async (
     }
 
     const patch: Partial<OrderItem> = { ...parsedOrder, userId: user.id };
-    if (isPatchApplied(patch, existingOrder)) {
+    const isStoredPackingListStale = packingList !== undefined || existingOrder.userId !== user.id;
+    const shouldDeletePackingList =
+      isStoredPackingListStale && patch.packingList === undefined && Object.hasOwn(existingOrder, "packingList");
+    if (!shouldDeletePackingList && isPatchApplied(patch, existingOrder)) {
       continue;
     }
 
-    pendingWrites.push({ type: "update", id: existingOrder.id, data: patch });
+    const data = shouldDeletePackingList ? { ...patch, packingList: FieldValue.delete() } : patch;
+    pendingWrites.push({ type: "update", id: existingOrder.id, data });
     stats.updated += 1;
   }
 
