@@ -183,6 +183,7 @@ export const authRoutes = async (app: FastifyInstance) => {
           phone: toText(userDoc.get("phone")),
           firstname: toText(userDoc.get("firstname")),
           lastname: toText(userDoc.get("lastname")),
+          middlename: toText(userDoc.get("middlename")),
           city: toText(userDoc.get("city")),
         },
       };
