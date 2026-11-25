@@ -42,26 +42,23 @@ npm run start
 - При ошибках отправляется alert в Telegram (если настроен).
 - При успешной выгрузке (created + updated > 0) отправляется alert в Telegram.
 
-## Production deploy (Railway)
+## Production deploy (Timeweb Cloud)
 
-1. В сервисе Railway укажи:
-   - **Root Directory**: `.` (для отдельного backend-репозитория)
+Сервер работает в Timeweb Cloud (App Platform): `https://mavludin-eleven-cargo-server-8f6b.twc1.net`.
+
+1. Сборка и запуск:
    - **Build Command**: `npm run build`
    - **Start Command**: `npm run start`
-   - Если backend лежит в монорепозитории, укажи папку проекта как Root Directory.
-2. Не задавай `PORT` вручную. Railway сам передает порт.
-3. Обязательно задай переменные из `.env.example`:
-   - Firebase credentials
+2. Сервер слушает `PORT` (по умолчанию `4000`) на `0.0.0.0` - порт в настройках приложения Timeweb должен совпадать.
+3. Переменные окружения задаются в панели Timeweb, список - в `.env.example`:
+   - Firebase credentials и `ADMIN_UIDS`
    - Google Sheet settings
-   - Telegram alert settings
-   - `CORS_ORIGIN` с доменом frontend (без завершающего `/`)
+   - Telegram alert settings; `ALERT_TELEGRAM_API_URL` - адрес relay, если `api.telegram.org` с хостинга недоступен
+   - `CORS_ORIGIN` с доменом админки (без завершающего `/`)
 4. Для прода включи cron:
    - `CRON_ENABLED=true`
-5. Для ручного запуска импорта через UI задай:
-   - `JOB_TOKEN` в backend
-   - такой же токен во frontend env (`VITE_IMPORT_API_TOKEN`)
-6. Healthcheck в Railway:
-   - путь `/health` (или `/`)
+5. Для ручного запуска импорта (`POST /jobs/import-orders/run`) задай `JOB_TOKEN`.
+6. Внешний монитор (UptimeRobot) проверяет `/status`; `/health` - только что процесс жив.
 
 ## Smoke test after deploy
 

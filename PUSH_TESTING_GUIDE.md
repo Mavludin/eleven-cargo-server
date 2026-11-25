@@ -100,7 +100,7 @@ curl -i -X POST "http://127.0.0.1:4000/jobs/import-orders/run" \
 5. **Cron не запускается**
    - Проверьте `CRON_ENABLED=true`.
    - Проверьте `CRON_SCHEDULE` и `CRON_TZ`.
-   - Убедитесь, что процесс жив (health endpoint и логи на Railway).
+   - Убедитесь, что процесс жив (health endpoint и логи в Timeweb).
 
 ## Финальный QA checklist (backend + contract)
 
