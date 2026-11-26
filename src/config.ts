@@ -50,6 +50,7 @@ const envSchema = z.object({
   CRON_TZ: z.string().default("Europe/Moscow"),
   IMPORT_MAX_AGE_HOURS: z.coerce.number().positive().default(19),
   CORS_ORIGIN: z.string().default("*"),
+  CNY_RATE_SOURCE_URL: z.url().optional(),
 
   ALERT_TELEGRAM_BOT_TOKEN: z.string().optional(),
   ALERT_TELEGRAM_CHAT_ID: z.string().optional(),
