@@ -32,6 +32,14 @@ npm run start
 - `POST /admin/errors` - отчёт об ошибке из админки (Bearer ID-токен админа) → лог и Telegram
 - `POST /jobs/import-orders/run` - ручной запуск импорта  
   Если задан `JOB_TOKEN`, передавай header `x-job-token`.
+- `POST /jobs/cny-rate/run` - ручное обновление курса юаня (тот же `x-job-token`)
+
+## CNY rate
+
+- Раз в час с 9 до 21 (`CRON_TZ`) сервер читает публичную ленту канала по `CNY_RATE_SOURCE_URL` и берёт самый свежий пост с датой и курсом «от 1 000 ¥». В prod это Cloudflare Worker, который проксирует `https://t.me/s/elvnpay`: `t.me` с хостинга недоступен.
+- Курс пишется в Firestore `config/cnyRate` (`rate` - ₽ за 1 ¥, `rateDate`, `postUrl`, `updatedAt`), только если изменился и не старше сохранённого.
+- Если с 16:00 курса за сегодня нет или лента не разбирается, уходит один alert в Telegram за день.
+- Без `CNY_RATE_SOURCE_URL` или при `CRON_ENABLED=false` обновление по расписанию выключено.
 
 ## Import logic
 
